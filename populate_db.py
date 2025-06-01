@@ -90,7 +90,6 @@ def populate_db():
 
     conn.commit()
     conn.close()
-    print("DB populated with random values")
 
 if __name__ == "__main__":
     populate_db()
