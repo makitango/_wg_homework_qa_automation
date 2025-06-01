@@ -1,45 +1,42 @@
-import sqlite3
 import pytest
-from populate_db import populate_db
-from db_setup import create_db
+import sqlite3
+import os
+from conftest import load_ships_data
 
-def get_ship_components(conn):
-    cur = conn.cursor()
-    cur.execute("SELECT ship, weapon, hull, engine FROM ships")
-    return {row[0]: (row[1], row[2], row[3]) for row in cur.fetchall()}
+original_db_path = "ships.db"
 
-def get_component_params(conn, table, component_id):
-    cur = conn.cursor()
-    cur.execute(f"PRAGMA table_info({table})")
-    columns = [col[1] for col in cur.fetchall() if col[1] != table[:-1]]
-    cur.execute(f"SELECT {', '.join(columns)} FROM {table} WHERE {table[:-1]} = ?", (component_id,))
-    row = cur.fetchone()
-    return dict(zip(columns, row)) if row else {}
+@pytest.fixture(scope="module")
+def original_data():
+    with sqlite3.connect(original_db_path) as conn:
+        return load_ships_data(conn)
 
-def compare_components(ship, comp_type, orig_id, rand_id, orig_conn, rand_conn, failures):
-    if orig_id != rand_id:
-        failures.append(f"{ship}: expected {comp_type} {orig_id}, was {rand_id}")
-        return
-    orig_params = get_component_params(orig_conn, comp_type + "s", orig_id)
-    rand_params = get_component_params(rand_conn, comp_type + "s", rand_id)
-    for param in orig_params:
-        if orig_params[param] != rand_params.get(param):
-            failures.append(f"{ship}: {comp_type} param '{param}' expected {orig_params[param]}, was {rand_params.get(param)}")
+@pytest.mark.parametrize("ship_data", load_ships_data(sqlite3.connect(original_db_path)), ids=lambda x: x["name"])
+def test_component_comparison(ship_data, randomized_db):
+    ship_name = ship_data["name"]
+    with sqlite3.connect(randomized_db) as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT hull, weapon, engine FROM ships WHERE ship = ?", (ship_name,))
+        randomized_components = cur.fetchone()
+        if randomized_components is None:
+            pytest.fail(f"{ship_name} missing in randomized DB")
 
-def test_compare_original_and_randomized_db(randomized_db):
-    original_path = "ships.db"
-    orig_conn = sqlite3.connect(original_path)
-    rand_conn = sqlite3.connect(randomized_db)
-    orig_data = get_ship_components(orig_conn)
-    rand_data = get_ship_components(rand_conn)
-    failures = []
-    for ship in orig_data:
-        orig_weapon, orig_hull, orig_engine = orig_data[ship]
-        rand_weapon, rand_hull, rand_engine = rand_data[ship]
-        compare_components(ship, "weapon", orig_weapon, rand_weapon, orig_conn, rand_conn, failures)
-        compare_components(ship, "hull", orig_hull, rand_hull, orig_conn, rand_conn, failures)
-        compare_components(ship, "engine", orig_engine, rand_engine, orig_conn, rand_conn, failures)
-    orig_conn.close()
-    rand_conn.close()
-    if failures:
-        pytest.fail("\n" + "\n".join(failures))
+        randomized_hull, randomized_weapon, randomized_engine = randomized_components
+
+        if randomized_hull != ship_data["hull"]:
+            pytest.fail(f"{ship_name}: expected hull {ship_data['hull']}, was {randomized_hull}")
+        if randomized_weapon != ship_data["weapon"]:
+            pytest.fail(f"{ship_name}: expected weapon {ship_data['weapon']}, was {randomized_weapon}")
+        if randomized_engine != ship_data["engine"]:
+            pytest.fail(f"{ship_name}: expected engine {ship_data['engine']}, was {randomized_engine}")
+
+        for component, randomized_id in zip(["hulls", "weapons", "engines"], randomized_components):
+            original_id = ship_data[component[:-1]]
+            cur.execute(f"SELECT * FROM {component} WHERE {component[:-1]} = ?", (original_id,))
+            original_row = cur.fetchone()
+            cur.execute(f"SELECT * FROM {component} WHERE {component[:-1]} = ?", (randomized_id,))
+            randomized_row = cur.fetchone()
+
+            for idx in range(1, len(original_row)):
+                param_name = cur.description[idx][0]
+                if original_row[idx] != randomized_row[idx]:
+                    pytest.fail(f"{ship_name}: {component[:-1]} param '{param_name}' expected {original_row[idx]}, was {randomized_row[idx]}")
