@@ -1,7 +1,6 @@
 import sqlite3
 import os
 
-
 def create_db():
     if os.path.exists("ships.db"):
         os.remove("ships.db")
@@ -53,6 +52,6 @@ def create_db():
 
     conn.commit()
     conn.close()
-    print("DB ships with sub DBs created.")
 
-create_db()
+if __name__ == "__main__":
+    create_db()

@@ -61,6 +61,7 @@ def randomized_db():
             cur.execute(f"UPDATE {component_table} SET {param_col} = ? WHERE {component_table[:-1]} = ?", (new_param_value, component_id_col))
 
     conn.commit()
+    print(f"Using temp DB path: {temp_db_path}")
     yield temp_db_path
     conn.close()
     os.remove(temp_db_path)
