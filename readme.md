@@ -45,4 +45,4 @@ The assignment should result in at least the following:
 - A script that creates and fills the initial database, a Python module that contains the tests.
 - (Optional) conftest.py module, contains fixtures and hooks. • Code style – PEP8.
 
-Link to my GitHug project: https://github.com/users/makitango/projects/3
+Link to my GitHub project: https://github.com/users/makitango/projects/3
